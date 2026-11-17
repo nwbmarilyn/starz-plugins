@@ -155,8 +155,8 @@ private:
         ctl.clear();
         auto knob = [&](int id, float cx, float cy, Color c, const wchar_t* lab) { ctl.push_back({id, kKnob, cx, cy, 24, 0, 0, c, lab}); };
         auto sel = [&](int id, float x, float y, float w, Color c, const wchar_t* lab) { ctl.push_back({id, kSelect, x, y, 0, w, 26, c, lab}); };
-        ctl.push_back({0, kArrowL, 366, 20, 0, 24, 24, cText, L""});
-        ctl.push_back({0, kArrowR, 574, 20, 0, 24, 24, cText, L""});
+        ctl.push_back({0, kArrowL, 360, 14, 0, 40, 36, cText, L""});
+        ctl.push_back({0, kArrowR, 544, 14, 0, 40, 36, cText, L""});
         const float xs[6] = {92, 204, 316, 428, 540, 652};
         const float y1 = 306, y2 = 398;
         if (L.reverb) {

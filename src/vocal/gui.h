@@ -150,8 +150,8 @@ private:
         auto sel = [&](int id, float x, float y, float w, Color c, const wchar_t* lab) {
             ctl.push_back({id, kSelect, x, y, 0, w, 26, c, lab});
         };
-        ctl.push_back({0, kArrowL, 366, 20, 0, 24, 24, cText, L""});
-        ctl.push_back({0, kArrowR, 574, 20, 0, 24, 24, cText, L""});
+        ctl.push_back({0, kArrowL, 360, 14, 0, 40, 36, cText, L""});
+        ctl.push_back({0, kArrowR, 544, 14, 0, 40, 36, cText, L""});
         sel(2, 44, 276, 68, cAqua, L"KEY");
         sel(3, 118, 276, 108, cAqua, L"SCALE");
         sel(6, 232, 276, 88, cAqua, L"ENABLE");
