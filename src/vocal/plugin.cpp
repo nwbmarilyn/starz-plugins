@@ -1,9 +1,7 @@
 #define NOMINMAX
 #include <algorithm>
 #include "bridge.h"
-#if defined(_WIN32)
 #include "gui.h"
-#endif
 #include "public.sdk/source/main/pluginfactory.h"
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -169,7 +167,6 @@ public:
 
     IPlugView* PLUGIN_API createView(FIDString name) SMTG_OVERRIDE
     {
-#if defined(_WIN32)
         if (name && strcmp(name, ViewType::kEditor) == 0)
         {
             static double mn[kParamCount], mx[kParamCount], df[kParamCount];
@@ -183,9 +180,6 @@ public:
             }
             return new gui::View(this, kParamCount, mn, mx, df, st, gPresetNames);
         }
-#else
-        (void)name;
-#endif
         return nullptr;
     }
 

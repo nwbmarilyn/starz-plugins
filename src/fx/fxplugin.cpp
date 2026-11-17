@@ -1,10 +1,6 @@
 #include <algorithm>
 #include "bridge.h"
-#if defined(_WIN32)
 #include "fxgui.h"
-#else
-namespace fxgui { struct Layout { bool reverb; const wchar_t* title; const wchar_t* sub; int a; int b; }; static const int cYellow = 0, cAqua = 0, cPink = 0; }
-#endif
 #include "public.sdk/source/main/pluginfactory.h"
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -175,7 +171,6 @@ public:
 
     IPlugView* PLUGIN_API createView(FIDString name) SMTG_OVERRIDE
     {
-#if defined(_WIN32)
         if (name && strcmp(name, ViewType::kEditor) == 0)
         {
             static double mn[kParamCount], mx[kParamCount], df[kParamCount];
@@ -189,9 +184,6 @@ public:
             }
             return new fxgui::View(this, kLayout, kParamCount, mn, mx, df, st, gPresetNames, kPresetCount);
         }
-#else
-        (void)name;
-#endif
         return nullptr;
     }
 

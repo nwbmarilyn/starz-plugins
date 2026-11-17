@@ -1,16 +1,17 @@
 #pragma once
-#define NOMINMAX
 #include <algorithm>
-#include <windows.h>
-#include <objidl.h>
-namespace Gdiplus { using std::min; using std::max; }
-#include <gdiplus.h>
-#include <shlwapi.h>
-#include <commdlg.h>
+#include <chrono>
 #include <cmath>
+#include <cstring>
 #include <cwchar>
+#include <cwctype>
 #include <string>
 #include <vector>
+#if defined(_WIN32)
+#include "gfx_win.h"
+#elif defined(__APPLE__)
+#include "gfx_cg.h"
+#endif
 #include "bridge.h"
 #include "version.h"
 #include "logo_data.h"
@@ -20,6 +21,11 @@ namespace Gdiplus { using std::min; using std::max; }
 namespace ui {
 
 using namespace Gdiplus;
+
+static long long nowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 enum Kind { kKnob, kSelect, kArrowL, kArrowR, kSave, kLoad };
 
@@ -36,20 +42,14 @@ static const Color cBg1(255, 206, 206, 203), cBg2(255, 192, 192, 190), cCard(255
 static const Color cText(255, 17, 17, 17), cDim(255, 112, 112, 112), cPink(255, 255, 85, 0), cAqua(255, 17, 17, 17), cYellow(255, 82, 82, 82);
 static const Color dText(255, 226, 224, 216), dDim(255, 142, 142, 138), dAmber(255, 255, 150, 60), dGlass(255, 150, 150, 146);
 
-static ULONG_PTR gToken = 0;
-static int gRef = 0;
-static Image* gLogo = nullptr;
+inline int gRef = 0;
+inline Image* gLogo = nullptr;
 
 static void acquire()
 {
     if (gRef++ == 0) {
-        GdiplusStartupInput in;
-        GdiplusStartup(&gToken, &in, nullptr);
-        IStream* st = SHCreateMemStream(kLogoPng, (UINT)kLogoPngSize);
-        if (st) {
-            gLogo = Image::FromStream(st);
-            st->Release();
-        }
+        gfx::startup();
+        gLogo = gfx::loadLogo(kLogoPng, (unsigned long)kLogoPngSize);
     }
 }
 
@@ -58,7 +58,7 @@ static void release()
     if (--gRef == 0) {
         delete gLogo;
         gLogo = nullptr;
-        GdiplusShutdown(gToken);
+        gfx::shutdown();
     }
 }
 
@@ -265,7 +265,7 @@ static void analogKnob(Graphics& g, float cx, float cy, float r, float v, Color 
     lcd(g, cx, cy + r + 26, 66, 15, value, 10.5f, hot ? Color(255, 255, 196, 120) : dAmber);
 }
 
-class BaseView : public Steinberg::CPluginView {
+class ViewCore {
 public:
     struct Cfg {
         int w, h;
@@ -279,71 +279,138 @@ public:
         int nPre;
     };
 
-    BaseView(Host* host, const Cfg& cfg) : hostp(host), C(cfg), kW(cfg.w), kH(cfg.h)
-    {
-        rect = Steinberg::ViewRect(0, 0, kW, kH);
-    }
+    ViewCore(Host* host, const Cfg& cfg) : hostp(host), C(cfg), kW(cfg.w), kH(cfg.h) {}
+    virtual ~ViewCore() {}
 
-    Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) SMTG_OVERRIDE
-    {
-        return strcmp(type, "HWND") == 0 ? Steinberg::kResultTrue : Steinberg::kResultFalse;
-    }
+    int width() const { return kW; }
+    int height() const { return kH; }
 
-    Steinberg::tresult PLUGIN_API attached(void* parent, Steinberg::FIDString type) SMTG_OVERRIDE
+    void init()
     {
-        acquire();
-        HINSTANCE hi = GetModuleHandleW(nullptr);
-        WNDCLASSW wc = {};
-        wc.lpfnWndProc = &BaseView::proc;
-        wc.hInstance = hi;
-        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wc.lpszClassName = C.cls;
-        RegisterClassW(&wc);
         buildBar();
         layoutCtl();
         refreshUsers();
-        hwnd = CreateWindowExW(0, C.cls, L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, kW, kH, (HWND)parent, nullptr, hi, this);
-        SetTimer(hwnd, 1, 33, nullptr);
-        return Steinberg::CPluginView::attached(parent, type);
     }
 
-    Steinberg::tresult PLUGIN_API removed() SMTG_OVERRIDE
+    void dropCache()
     {
-        if (hwnd) {
-            KillTimer(hwnd, 1);
-            DestroyWindow(hwnd);
-            hwnd = nullptr;
-            delete bgCache;
-            bgCache = nullptr;
-            release();
+        delete bgCache;
+        bgCache = nullptr;
+    }
+
+    void tick()
+    {
+        phase += 0.033f;
+        onTick();
+    }
+
+    void paintAll(Graphics& g)
+    {
+        if (bgCache && bgScale != gDeviceScale) dropCache();
+        if (!bgCache) buildBackground();
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+        g.DrawImage(bgCache, 0, 0);
+        drawHeader(g);
+        paintBody(g);
+        for (size_t i = 0; i < ctl.size(); i++) {
+            const Ctl& c = ctl[i];
+            bool act = (int)i == drag, hov = (int)i == hover;
+            if (c.kind == kKnob) analogKnob(g, c.x, c.y, c.r, hostp->getNorm(c.id), c.col, act || hov, c.label, hostp->text(c.id) + unitOf(c.id));
+            else if (c.kind == kSelect) drawSelect(g, c, hov);
         }
-        return Steinberg::CPluginView::removed();
     }
 
-    Steinberg::tresult PLUGIN_API onSize(Steinberg::ViewRect* r) SMTG_OVERRIDE
+    bool mouseDown(int x, int y, bool shift)
     {
-        if (r) rect = *r;
-        return Steinberg::kResultTrue;
+        int i = hit(x, y);
+        if (i < 0) return false;
+        const Ctl c = ctl[i];
+        if (c.kind == kArrowL || c.kind == kArrowR) {
+            stepPreset(c.kind == kArrowL ? -1 : 1);
+        } else if (c.kind == kSave) {
+            doSave();
+        } else if (c.kind == kLoad) {
+            doLoad();
+        } else if (c.kind == kSelect) {
+            cycle(c.id, shift ? -1 : 1);
+        } else {
+            drag = i;
+            dragY = y;
+            dragN = hostp->getNorm(c.id);
+            hostp->edit(c.id, dragN, 0);
+            return true;
+        }
+        return false;
     }
-    Steinberg::tresult PLUGIN_API canResize() SMTG_OVERRIDE { return Steinberg::kResultFalse; }
+
+    void mouseMove(int x, int y, bool shift)
+    {
+        if (drag >= 0) {
+            const Ctl& c = ctl[drag];
+            double sens = shift ? 0.0008 : 0.006;
+            hostp->edit(c.id, quant(c.id, dragN + (dragY - y) * sens), 1);
+        } else {
+            hover = hit(x, y);
+        }
+    }
+
+    void mouseLeave() { if (drag < 0) hover = -1; }
+
+    bool mouseUp()
+    {
+        if (drag < 0) return false;
+        hostp->edit(ctl[drag].id, hostp->getNorm(ctl[drag].id), 2);
+        drag = -1;
+        return true;
+    }
+
+    void rightDown(int x, int y)
+    {
+        int i = hit(x, y);
+        if (i >= 0 && ctl[i].kind == kKnob) {
+            int id = ctl[i].id;
+            hostp->edit(id, 0, 0);
+            hostp->edit(id, quant(id, (C.def[id] - C.mn[id]) / (C.mx[id] - C.mn[id])), 1);
+            hostp->edit(id, 0, 2);
+        }
+    }
+
+    void wheel(int x, int y, int dir)
+    {
+        int i = hit(x, y);
+        if (i < 0) return;
+        if (ctl[i].kind == kKnob) {
+            int id = ctl[i].id;
+            double step = C.st[id] > 0 ? 1.0 / C.st[id] : 0.02;
+            hostp->edit(id, 0, 0);
+            hostp->edit(id, quant(id, hostp->getNorm(id) + dir * step), 1);
+            hostp->edit(id, 0, 2);
+        } else if (ctl[i].kind == kSelect) {
+            cycle(ctl[i].id, dir);
+        } else if (ctl[i].kind == kArrowL || ctl[i].kind == kArrowR) {
+            stepPreset(-dir);
+        }
+    }
 
 protected:
     Host* hostp;
     Cfg C;
     int kW, kH;
-    HWND hwnd = nullptr;
     std::vector<Ctl> ctl;
     int drag = -1, hover = -1;
     int dragY = 0;
     float dragN = 0;
     float phase = 0;
     Bitmap* bgCache = nullptr;
+    float bgScale = 1.f;
     std::vector<userpresets::fs::path> users;
     int userIdx = -1;
     float lastP0 = -1.f;
     std::wstring toast;
-    DWORD toastUntil = 0;
+    long long toastUntil = 0;
 
+    virtual bool pickFile(bool save, userpresets::fs::path& out) = 0;
     virtual void layoutCtl() = 0;
     virtual void paintBody(Graphics& g) = 0;
     virtual const wchar_t* unitOf(int id) = 0;
@@ -436,27 +503,6 @@ protected:
         lastP0 = hostp->getNorm(0);
     }
 
-    bool pickFile(bool save, userpresets::fs::path& out)
-    {
-        userpresets::ensureDir(userpresets::dirFor(C.sub));
-        wchar_t buf[1024] = L"";
-        if (save) lstrcpynW(buf, L"My preset.starz", 1024);
-        std::wstring dir = userpresets::dirFor(C.sub).wstring();
-        OPENFILENAMEW o = {};
-        o.lStructSize = sizeof(o);
-        o.hwndOwner = hwnd;
-        o.lpstrFilter = L"Starz preset (*.starz)\0*.starz\0\0";
-        o.lpstrFile = buf;
-        o.nMaxFile = 1024;
-        o.lpstrInitialDir = dir.c_str();
-        o.lpstrDefExt = L"starz";
-        o.Flags = OFN_NOCHANGEDIR | OFN_EXPLORER | (save ? OFN_OVERWRITEPROMPT : (OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST));
-        BOOL ok = save ? GetSaveFileNameW(&o) : GetOpenFileNameW(&o);
-        if (!ok) return false;
-        out = userpresets::fs::path(buf);
-        return true;
-    }
-
     void doSave()
     {
         userpresets::fs::path p;
@@ -473,7 +519,7 @@ protected:
         } else {
             toast = L"save failed";
         }
-        toastUntil = GetTickCount() + 2600;
+        toastUntil = nowMs() + 2600;
     }
 
     void doLoad()
@@ -493,117 +539,13 @@ protected:
         } else {
             toast = L"load failed";
         }
-        toastUntil = GetTickCount() + 2600;
+        toastUntil = nowMs() + 2600;
     }
 
     std::wstring presetName()
     {
         if (userIdx >= 0 && userIdx < (int)users.size()) return users[userIdx].stem().wstring();
         return C.pnames[factoryIdx()];
-    }
-
-    static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
-    {
-        BaseView* v;
-        if (m == WM_NCCREATE) {
-            v = (BaseView*)((CREATESTRUCTW*)l)->lpCreateParams;
-            SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)v);
-        } else {
-            v = (BaseView*)GetWindowLongPtrW(h, GWLP_USERDATA);
-        }
-        if (!v) return DefWindowProcW(h, m, w, l);
-        return v->msg(h, m, w, l);
-    }
-
-    LRESULT msg(HWND h, UINT m, WPARAM w, LPARAM l)
-    {
-        switch (m) {
-        case WM_ERASEBKGND:
-            return 1;
-        case WM_TIMER:
-            phase += 0.033f;
-            onTick();
-            InvalidateRect(h, nullptr, FALSE);
-            return 0;
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC dc = BeginPaint(h, &ps);
-            paint(dc);
-            EndPaint(h, &ps);
-            return 0;
-        }
-        case WM_LBUTTONDOWN: {
-            int x = (short)LOWORD(l), y = (short)HIWORD(l);
-            int i = hit(x, y);
-            if (i < 0) return 0;
-            const Ctl c = ctl[i];
-            if (c.kind == kArrowL || c.kind == kArrowR) {
-                stepPreset(c.kind == kArrowL ? -1 : 1);
-            } else if (c.kind == kSave) {
-                doSave();
-            } else if (c.kind == kLoad) {
-                doLoad();
-            } else if (c.kind == kSelect) {
-                cycle(c.id, (GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1);
-            } else {
-                drag = i;
-                dragY = y;
-                dragN = hostp->getNorm(c.id);
-                SetCapture(h);
-                hostp->edit(c.id, dragN, 0);
-            }
-            return 0;
-        }
-        case WM_LBUTTONDBLCLK:
-            return 0;
-        case WM_MOUSEMOVE: {
-            int x = (short)LOWORD(l), y = (short)HIWORD(l);
-            if (drag >= 0) {
-                const Ctl& c = ctl[drag];
-                double sens = (GetKeyState(VK_SHIFT) & 0x8000) ? 0.0008 : 0.006;
-                hostp->edit(c.id, quant(c.id, dragN + (dragY - y) * sens), 1);
-            } else {
-                hover = hit(x, y);
-            }
-            return 0;
-        }
-        case WM_LBUTTONUP:
-            if (drag >= 0) {
-                hostp->edit(ctl[drag].id, hostp->getNorm(ctl[drag].id), 2);
-                drag = -1;
-                ReleaseCapture();
-            }
-            return 0;
-        case WM_RBUTTONDOWN: {
-            int i = hit((short)LOWORD(l), (short)HIWORD(l));
-            if (i >= 0 && ctl[i].kind == kKnob) {
-                int id = ctl[i].id;
-                hostp->edit(id, 0, 0);
-                hostp->edit(id, quant(id, (C.def[id] - C.mn[id]) / (C.mx[id] - C.mn[id])), 1);
-                hostp->edit(id, 0, 2);
-            }
-            return 0;
-        }
-        case WM_MOUSEWHEEL: {
-            POINT p = {(short)LOWORD(l), (short)HIWORD(l)};
-            ScreenToClient(h, &p);
-            int i = hit(p.x, p.y);
-            if (i >= 0 && ctl[i].kind == kKnob) {
-                int id = ctl[i].id;
-                int d = GET_WHEEL_DELTA_WPARAM(w) > 0 ? 1 : -1;
-                double step = C.st[id] > 0 ? 1.0 / C.st[id] : 0.02;
-                hostp->edit(id, 0, 0);
-                hostp->edit(id, quant(id, hostp->getNorm(id) + d * step), 1);
-                hostp->edit(id, 0, 2);
-            } else if (i >= 0 && ctl[i].kind == kSelect) {
-                cycle(ctl[i].id, GET_WHEEL_DELTA_WPARAM(w) > 0 ? 1 : -1);
-            } else if (i >= 0 && (ctl[i].kind == kArrowL || ctl[i].kind == kArrowR)) {
-                stepPreset(GET_WHEEL_DELTA_WPARAM(w) > 0 ? -1 : 1);
-            }
-            return 0;
-        }
-        }
-        return DefWindowProcW(h, m, w, l);
     }
 
     void drawSelect(Graphics& g, const Ctl& c, bool hov)
@@ -617,15 +559,16 @@ protected:
     {
         delete bgCache;
         bgCache = new Bitmap(kW, kH, PixelFormat32bppPARGB);
+        bgScale = gDeviceScale;
         Graphics b(bgCache);
-        LinearGradientBrush bg(Point(0, 0), Point(0, kH), cBg1, cBg2);
+        LinearGradientBrush bg(Gdiplus::Point(0, 0), Gdiplus::Point(0, kH), cBg1, cBg2);
         b.FillRectangle(&bg, 0, 0, kW, kH);
         Pen grain(Color(9, 0, 0, 0), 1.f);
         for (int y = 0; y < kH; y += 2) b.DrawLine(&grain, 0, y, kW, y);
         Pen grain2(Color(7, 255, 255, 255), 1.f);
         for (int y = 1; y < kH; y += 4) b.DrawLine(&grain2, 0, y, kW, y);
         GraphicsPath vg;
-        vg.AddRectangle(Rect(-kW / 3, -kH / 3, kW + 2 * (kW / 3), kH + 2 * (kH / 3)));
+        vg.AddRectangle(Gdiplus::Rect(-kW / 3, -kH / 3, kW + 2 * (kW / 3), kH + 2 * (kH / 3)));
         PathGradientBrush pg(&vg);
         pg.SetCenterColor(Color(0, 0, 0, 0));
         Color sur[1] = {Color(46, 0, 0, 0)};
@@ -683,28 +626,14 @@ protected:
         metalButton(g, ld->x, by, ld->w, bh, hovered(ld));
         engrave(g, L"SAVE", sv->x + sv->w / 2, by + bh / 2, 10.5f, cText, true, 1, 1.4f);
         engrave(g, L"LOAD", ld->x + ld->w / 2, by + bh / 2, 10.5f, cText, true, 1, 1.4f);
-        if (toastUntil > GetTickCount()) text(g, toast, 736, 58, 10.5f, Color(255, 200, 70, 0), true, 2);
-    }
-
-    void paint(HDC dc)
-    {
-        if (!bgCache) buildBackground();
-        Bitmap bmp(kW, kH, PixelFormat32bppPARGB);
-        Graphics g(&bmp);
-        g.SetSmoothingMode(SmoothingModeAntiAlias);
-        g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
-        g.DrawImage(bgCache, 0, 0);
-        drawHeader(g);
-        paintBody(g);
-        for (size_t i = 0; i < ctl.size(); i++) {
-            const Ctl& c = ctl[i];
-            bool act = (int)i == drag, hov = (int)i == hover;
-            if (c.kind == kKnob) analogKnob(g, c.x, c.y, c.r, hostp->getNorm(c.id), c.col, act || hov, c.label, hostp->text(c.id) + unitOf(c.id));
-            else if (c.kind == kSelect) drawSelect(g, c, hov);
-        }
-        Graphics out(dc);
-        out.DrawImage(&bmp, 0, 0);
+        if (toastUntil > nowMs()) text(g, toast, 736, 58, 10.5f, Color(255, 200, 70, 0), true, 2);
     }
 };
 
 }
+
+#if defined(_WIN32)
+#include "view_win.h"
+#elif defined(__APPLE__)
+#include "view_mac.h"
+#endif

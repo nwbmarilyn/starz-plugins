@@ -6,6 +6,7 @@ permissions:
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ['v*']
 
 jobs:
@@ -21,6 +22,30 @@ jobs:
         shell: bash
         run: |
           cmake --build build --config Release > bld.log 2>&1 || { grep -E "error:|error LNK|fatal error|Error " bld.log | head -10 | while read -r l; do echo "::error::${l:0:400}"; done; exit 1; }
+      - name: Screenshots
+        shell: bash
+        run: |
+          mkdir -p shots
+          exe=$(find build -name StarzShots -type f | head -1)
+          "$exe" shots > shots/log.txt 2>&1 && echo ok || { echo "::error::shots failed"; tail -5 shots/log.txt | while read -r l; do echo "::error::${l:0:300}"; done; }
+          cat shots/log.txt
+      - name: Publish screenshots
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p shots
+          [ -f bld.log ] && grep -E "error|warning: unused" bld.log | head -60 > shots/build-errors.txt || true
+          [ -f bld.log ] && tail -40 bld.log > shots/build-tail.txt || true
+          [ -f cfg.log ] && tail -40 cfg.log > shots/cfg-tail.txt || true
+          cp -r shots "$RUNNER_TEMP/shots"
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan ci-shots
+          git rm -rf . > /dev/null 2>&1 || true
+          cp "$RUNNER_TEMP"/shots/* .
+          git add -A
+          git commit -m "starz: снимки mac" > /dev/null
+          git push -f origin ci-shots
       - name: Sign ad hoc
         run: |
           for b in $(find build -name 'Starz*.vst3' -type d); do
