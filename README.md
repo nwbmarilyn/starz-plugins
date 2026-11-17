@@ -1,7 +1,7 @@
 <h1 align="center">STARZ plugins</h1>
 
 <p align="center"><b>Vocal tools for FL Studio: auto-tune, swarm of voices, reverb and delay.</b><br>
-Три VST3-плагина для вокала. Windows сейчас, macOS в работе.</p>
+Три VST3-плагина для вокала. Windows и macOS.</p>
 
 <p align="center"><img src="docs/img/vocal.png" width="720" alt="Starz Vocal"></p>
 
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/nwbmarilyn/starz-plugins/main/insta
 ```
 Ставит в `~/Library/Audio/Plug-Ins/VST3` (для всех пользователей: добавь `--system`). Затем перезапусти DAW и пересканируй плагины.
 
-> Версия для macOS собирается автоматически (GitHub Actions), но на настоящем Mac пока не проверялась, и собственного окна у неё нет: DAW покажет свой список параметров. Если что-то не запускается, напиши в Issues.
+> Версия для macOS собирается автоматически (GitHub Actions), и теперь с собственным окном, как на Windows, но на настоящем Mac пока проверена только в CI (снимки окон и логика мыши). Если что-то не запускается, напиши в Issues.
 
 ### Если плагин не виден
 - Включи сканирование папки VST3 в настройках DAW (Windows: `C:\Program Files\Common Files\VST3`).

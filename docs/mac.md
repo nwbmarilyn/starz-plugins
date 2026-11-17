@@ -1,14 +1,15 @@
 # macOS
 
 ## Что сделано
-- DSP (`src/core`) без платформенных заголовков, строки параметров переводятся из `char16_t` поэлементно, окно Windows закрыто `#if defined(_WIN32)`.
-- `CMakeLists.txt` под VST3 SDK (макрос `smtg_add_vst3plugin` сам делает бандл `.vst3` с Info.plist, точкой входа `macmain.cpp`, универсальный бинарник arm64 + x86_64).
-- `.github/workflows/build.yml` собирает на `macos-14`, ставит ad hoc подпись (`codesign -s -`), упаковывает `ditto` в zip.
+- DSP (`src/core`) без платформенных заголовков.
+- Окно на macOS: `src/common/view_mac.mm` (NSView внутри `IPlugView`, `kPlatformTypeNSView`, таймер 33 мс, мышь: перетаскивание, Shift для точной подстройки, правая кнопка или Ctrl+клик сбрасывает, колесо, клики; Retina; NSSavePanel и NSOpenPanel для SAVE и LOAD). Рисует `src/common/gfx_cg.h`: слой с теми же именами, что в GDI+, поверх CoreGraphics и CoreText. Имя класса NSView уникально для каждого плагина (`Starz<Имя>NSView`), чтобы три бандла в одном процессе не конфликтовали.
+- Свои пресеты: `~/Library/Application Support/Starz/presets/<плагин>`.
+- `CMakeLists.txt` собирает универсальный бинарник arm64 + x86_64, цель `StarzShots` рисует каждое окно без экрана.
+- `.github/workflows/build.yml` на `macos-latest`: сборка, снимки окон и проверки мыши (`tools/mac_shots.cpp`), снимки и лог пушатся в ветку `ci-shots` (`mac-vocal.png`, `mac-reverb.png`, `mac-delay.png`, `log.txt`), ad hoc подпись, zip.
 
-## Чего нет и честно о проверке
-- **Сборка на macOS ни разу не запускалась**: на этой машине Windows, SDK Apple для кросс-сборки нет (и ставить его нельзя без Apple-устройства по лицензии). Ошибки первой сборки на Mac возможны, править по сообщениям компилятора.
-- **Окна на macOS нет**: `createView` возвращает `nullptr`, FL Studio для Mac покажет собственный список параметров (ручки, пресеты, Sync работают). Свой интерфейс на Mac в очереди (`roadmap.md`).
-- Не проверялось в FL Studio для macOS и в других DAW.
+## Что проверено и что нет
+- Проверено в CI: сборка, отрисовка окон в PNG, логика мыши (перетаскивание, Shift, сброс, колесо, стрелки пресетов) на заглушке хоста.
+- Не проверено на живом Mac: работа мыши и Retina внутри FL Studio, диалоги Save и Load, цвета и шрифт (на Mac системный шрифт, не Segoe UI, ширины чуть отличаются).
 
 ## Как собрать на Mac (вручную)
 1. Xcode Command Line Tools, CMake.

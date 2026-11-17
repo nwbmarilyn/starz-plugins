@@ -41,9 +41,9 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
           git checkout --orphan ci-shots
-          git rm -rf . > /dev/null 2>&1 || true
+          git rm -rf --cached . > /dev/null 2>&1 || true
           cp "$RUNNER_TEMP"/shots/* .
-          git add -A
+          git add -f $(ls "$RUNNER_TEMP/shots")
           git commit -m "starz: снимки mac" > /dev/null
           git push -f origin ci-shots
       - name: Sign ad hoc
@@ -81,13 +81,13 @@ jobs:
       - name: Collect
         shell: pwsh
         run: |
-          New-Item -ItemType Directory dist | Out-Null
+          New-Item -ItemType Directory -Force dist-out | Out-Null
           $found = @(Get-ChildItem build -Recurse -Filter 'Starz*.vst3')
           if ($found.Count -eq 0) { Get-ChildItem build -Recurse -Include *.vst3,*.dll | ForEach-Object { Write-Host ("::error::" + $_.FullName) }; exit 1 }
           foreach ($i in $found) {
-            if ($i.PSIsContainer) { Compress-Archive -Path $i.FullName -DestinationPath (Join-Path dist ($i.Name + '.zip')) -Force } else { Copy-Item $i.FullName dist }
+            if ($i.PSIsContainer) { Compress-Archive -Path $i.FullName -DestinationPath (Join-Path dist-out ($i.Name + '.zip')) -Force } else { Copy-Item $i.FullName dist-out }
           }
       - uses: actions/upload-artifact@v4
         with:
           name: starz-windows
-          path: dist/*
+          path: dist-out/*

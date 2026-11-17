@@ -148,6 +148,7 @@ static void behave(V* v, double* n, const double* mn, const double* mx, const do
 int main(int argc, char** argv)
 {
     std::string dir = argc > 1 ? argv[1] : ".";
+    ui::acquire();
     for (int i = 0; i < 34; i++) vN[i] = (vdf[i] - vmn[i]) / (vmx[i] - vmn[i]);
     vN[0] = 1.0;
     VBridge vb;
