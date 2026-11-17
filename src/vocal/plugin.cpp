@@ -56,7 +56,7 @@ static const PDef kDefs[kParamCount] = {
     {u"Output", u"dB", -12, 12, 0, 0},
     {u"Variation", u"", 1, 16, 1, 15},
     {u"Swarm", u"%", 0, 100, 100, 0},
-    {u"Latency Mode", u"", 0, 2, 1, 2},
+    {u"Latency Mode", u"", 0, 2, 0, 2},
 };
 
 struct Preset {
@@ -101,10 +101,6 @@ public:
         addAudioOutput(STR16("Stereo Out"), SpeakerArr::kStereo);
 
         addUnit(new Unit(STR16("Starz"), 1, kRootUnitId, 0));
-        ProgramList* pl = new ProgramList(String("Presets"), 0, 1);
-        for (int i = 0; i < 3; i++)
-            pl->addProgram(reinterpret_cast<const TChar*>(kPresets[i].name));
-        addProgramList(pl);
 
         for (int i = 0; i < kParamCount; i++)
         {
@@ -114,7 +110,7 @@ public:
             if (i == kPreset)
             {
                 auto* p = new StringListParameter(title, i, nullptr,
-                    ParameterInfo::kCanAutomate | ParameterInfo::kIsList | ParameterInfo::kIsProgramChange, 1);
+                    ParameterInfo::kCanAutomate | ParameterInfo::kIsList, 1);
                 for (int k = 0; k < 3; k++)
                     p->appendString(reinterpret_cast<const TChar*>(kPresets[k].name));
                 parameters.addParameter(p);

@@ -137,10 +137,6 @@ public:
         addAudioInput(STR16("Stereo In"), SpeakerArr::kStereo);
         addAudioOutput(STR16("Stereo Out"), SpeakerArr::kStereo);
         addUnit(new Unit(STR16("Starz"), 1, kRootUnitId, 0));
-        ProgramList* pl = new ProgramList(String("Presets"), 0, 1);
-        for (int i = 0; i < kPresetCount; i++)
-            pl->addProgram(reinterpret_cast<const TChar*>(kPresets[i].name));
-        addProgramList(pl);
         for (int i = 0; i < kParamCount; i++)
         {
             const PDef& d = kDefs[i];
@@ -149,7 +145,7 @@ public:
             if (i == kPreset)
             {
                 auto* p = new StringListParameter(title, i, nullptr,
-                    ParameterInfo::kCanAutomate | ParameterInfo::kIsList | ParameterInfo::kIsProgramChange, 1);
+                    ParameterInfo::kCanAutomate | ParameterInfo::kIsList, 1);
                 for (int k = 0; k < kPresetCount; k++)
                     p->appendString(reinterpret_cast<const TChar*>(kPresets[k].name));
                 parameters.addParameter(p);
