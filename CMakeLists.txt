@@ -41,16 +41,18 @@ set(STARZ_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vocal
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fx)
 
-smtg_add_vst3plugin(StarzVocal src/vocal/plugin.cpp)
+set(SCE ${sdk_dir}/public.sdk/source/vst/vstsinglecomponenteffect.cpp)
+
+smtg_add_vst3plugin(StarzVocal src/vocal/plugin.cpp ${SCE})
 target_include_directories(StarzVocal PRIVATE ${STARZ_INCLUDES})
 target_link_libraries(StarzVocal PRIVATE sdk)
 
-smtg_add_vst3plugin(StarzReverb src/fx/fxplugin.cpp)
+smtg_add_vst3plugin(StarzReverb src/fx/fxplugin.cpp ${SCE})
 target_include_directories(StarzReverb PRIVATE ${STARZ_INCLUDES})
 target_compile_definitions(StarzReverb PRIVATE ARK_REVERB=1)
 target_link_libraries(StarzReverb PRIVATE sdk)
 
-smtg_add_vst3plugin(StarzDelay src/fx/fxplugin.cpp)
+smtg_add_vst3plugin(StarzDelay src/fx/fxplugin.cpp ${SCE})
 target_include_directories(StarzDelay PRIVATE ${STARZ_INCLUDES})
 target_compile_definitions(StarzDelay PRIVATE ARK_DELAY=1)
 target_link_libraries(StarzDelay PRIVATE sdk)
