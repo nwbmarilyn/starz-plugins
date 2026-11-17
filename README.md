@@ -40,6 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/nwbmarilyn/starz-plugins/main/insta
 - В старом проекте плагин удали и вставь заново: DAW хранит копию предыдущей версии.
 
 ## Как пользоваться
+- **Пресеты:** стрелки сверху листают заводские и свои пресеты, SAVE сохраняет текущие настройки в файл, LOAD загружает. Файлы: Windows %APPDATA%\Starz\presets, macOS ~/Library/Application Support/Starz/presets.
 - **Тюн:** на канал с голосом поставь *Starz Vocal*, выбери ключ и гамму (Key, Scale). Preset *Auto-Tune Hard* даёт жёсткие ступеньки, *Auto-Tune* помягче.
 - **Рой голосов:** preset *Mr Kitty*, ручки Voices и Swarm. Для живого пения режим задержки *Live* или *Balanced*.
 - **Совет:** на дублях ставь по плагину на каждый дубль, а не один на всех: один экземпляр тюнит один голос.

@@ -58,7 +58,7 @@ int main(int argc, char** argv)
     wc.hInstance = GetModuleHandleW(nullptr);
     wc.lpszClassName = L"host";
     RegisterClassW(&wc);
-    HWND host = CreateWindowExW(WS_EX_TOOLWINDOW, L"host", L"p", WS_POPUP | WS_VISIBLE, -5000, -5000, 760, 520, nullptr, nullptr, wc.hInstance, nullptr);
+    HWND host = CreateWindowExW(WS_EX_TOOLWINDOW, L"host", L"p", WS_POPUP | WS_VISIBLE, -5000, -5000, 760, 524, nullptr, nullptr, wc.hInstance, nullptr);
     v->attached(host, "HWND");
     DWORD t0 = GetTickCount();
     MSG m;
@@ -70,12 +70,12 @@ int main(int argc, char** argv)
     HWND child = GetWindow(host, GW_CHILD);
     HDC dc = GetDC(host);
     HDC mem = CreateCompatibleDC(dc);
-    HBITMAP bm = CreateCompatibleBitmap(dc, 760, 520);
+    HBITMAP bm = CreateCompatibleBitmap(dc, 760, 524);
     SelectObject(mem, bm);
     PrintWindow(child, mem, 0);
-    BITMAPINFOHEADER bi = {sizeof(bi), 760, -520, 1, 32, BI_RGB};
-    std::vector<unsigned char> px(760 * 520 * 4);
-    GetDIBits(mem, bm, 0, 520, px.data(), (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+    BITMAPINFOHEADER bi = {sizeof(bi), 760, -524, 1, 32, BI_RGB};
+    std::vector<unsigned char> px(760 * 524 * 4);
+    GetDIBits(mem, bm, 0, 524, px.data(), (BITMAPINFO*)&bi, DIB_RGB_COLORS);
     FILE* f = fopen(argc > 1 ? argv[1] : "preview.raw", "wb");
     fwrite(px.data(), 1, px.size(), f);
     fclose(f);

@@ -20,3 +20,6 @@
 - Цвета: правка констант. Формы и отступы: функции `drawKnob`, `drawSelect`, `paint`.
 - Новый интерфейс для другой системы (macOS): реализовать окно поверх `Bridge` (`bridge.h`); палитру и разметку взять отсюда.
 - Снимок без показа окна: `tools/preview.cpp` (Vocal) и `tools/preview_fx.cpp` (`preview_fx.exe out.raw 0|1`: 0 реверб, 1 дилей), окно создаётся за экраном (-5000), PrintWindow пишет raw 32 бита BGRA.
+
+## Версия 0.6.0: аналоговый стиль
+Общий код окна: src/common/ui.h (BaseView: ручки, пластины, дисплеи, панель пресетов). Окна Vocal и FX только задают раскладку и содержимое дисплея. Лого: docs/img/logo.png, данные в src/common/logo_data.h, генерация 	ools/make_logo.py. Пользовательские пресеты: src/common/userpresets.h (файлы .starz, список нормированных значений).
