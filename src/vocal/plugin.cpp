@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cmath>
 #include "engine.h"
+#include "version.h"
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -397,5 +398,5 @@ bool DeinitModule() { return true; }
 
 BEGIN_FACTORY_DEF("Starz", "", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(kPluginUID), PClassInfo::kManyInstances, kVstAudioEffectClass, "Starz Vocal", Vst::kSimpleModeSupported,
-           "Fx", "0.4.0", kVstVersionString, StarzVocal::createInstance)
+           "Fx", STARZ_VERSION, kVstVersionString, StarzVocal::createInstance)
 END_FACTORY

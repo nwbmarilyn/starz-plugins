@@ -64,7 +64,7 @@ static void gdipRelease()
     }
 }
 
-static const Color cBg1(255, 255, 255, 255), cBg2(255, 243, 243, 243), cCard(255, 245, 245, 245), cCardEdge(255, 17, 17, 17);
+static const Color cBg1(255, 206, 206, 203), cBg2(255, 192, 192, 190), cCard(255, 224, 224, 222), cCardEdge(255, 17, 17, 17);
 static const Color cText(255, 17, 17, 17), cDim(255, 112, 112, 112), cPink(255, 255, 85, 0), cAqua(255, 17, 17, 17),
     cYellow(255, 82, 82, 82);
 
@@ -388,7 +388,7 @@ private:
             g.DrawArc(&val, c.x - c.r, c.y - c.r, c.r * 2, c.r * 2, a0, sweep * v);
         }
         float ir = c.r - 7;
-        SolidBrush body(Color(255, active ? 232 : 255, active ? 232 : 255, active ? 232 : 255));
+        SolidBrush body(Color(255, active ? 206 : 236, active ? 206 : 236, active ? 206 : 236));
         g.FillEllipse(&body, c.x - ir, c.y - ir, ir * 2, ir * 2);
         Pen rim(Color(200, 17, 17, 17), 1);
         g.DrawEllipse(&rim, c.x - ir, c.y - ir, ir * 2, ir * 2);
@@ -404,7 +404,7 @@ private:
 
     void drawSelect(Graphics& g, const Ctl& c, bool hov)
     {
-        SolidBrush bg(Color(255, hov ? 232 : 255, hov ? 232 : 255, hov ? 232 : 255));
+        SolidBrush bg(Color(255, hov ? 206 : 236, hov ? 206 : 236, hov ? 206 : 236));
         fillRR(g, bg, c.x, c.y, c.w, c.h, 13);
         Pen pn(Color(255, 17, 17, 17), 1);
         strokeRR(g, pn, c.x + 0.5f, c.y + 0.5f, c.w - 1, c.h - 1, 13);

@@ -19,6 +19,7 @@ namespace fxgui { struct Layout { bool reverb; const wchar_t* title; const wchar
 #include <atomic>
 #include <cmath>
 #include "fx.h"
+#include "version.h"
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -416,5 +417,5 @@ bool DeinitModule() { return true; }
 
 BEGIN_FACTORY_DEF("Starz", "", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(kPluginUID), PClassInfo::kManyInstances, kVstAudioEffectClass, kClassName, Vst::kSimpleModeSupported,
-           kSubCat, "0.2.0", kVstVersionString, StarzFx::createInstance)
+           kSubCat, STARZ_VERSION, kVstVersionString, StarzFx::createInstance)
 END_FACTORY
