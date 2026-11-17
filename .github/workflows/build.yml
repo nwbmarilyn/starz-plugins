@@ -30,7 +30,7 @@ jobs:
           "$exe" shots > shots/log.txt 2>&1 && echo ok || { echo "::error::shots failed"; tail -5 shots/log.txt | while read -r l; do echo "::error::${l:0:300}"; done; }
           cat shots/log.txt
       - name: Publish screenshots
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           mkdir -p shots
