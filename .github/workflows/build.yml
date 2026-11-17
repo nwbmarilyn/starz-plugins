@@ -23,13 +23,13 @@ jobs:
           cmake --build build --config Release > bld.log 2>&1 || { grep -E "error:|error LNK|fatal error|Error " bld.log | head -10 | while read -r l; do echo "::error::${l:0:400}"; done; exit 1; }
       - name: Sign ad hoc
         run: |
-          for b in $(find build -name '*.vst3' -type d); do
+          for b in $(find build -name 'Starz*.vst3' -type d); do
             codesign --force --deep -s - "$b"
           done
       - name: Pack
         run: |
           mkdir -p dist
-          for b in $(find build -name '*.vst3' -type d); do
+          for b in $(find build -name 'Starz*.vst3' -type d); do
             ditto -c -k --keepParent "$b" "dist/$(basename "$b").zip"
           done
       - uses: actions/upload-artifact@v4
@@ -57,8 +57,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
-          Get-ChildItem build -Recurse -Filter '*.vst3' | Where-Object { -not $_.PSIsContainer } | Copy-Item -Destination dist
+          Get-ChildItem build -Recurse -Filter 'Starz*.vst3' | ForEach-Object {
+            if ($_.PSIsContainer) { Compress-Archive -Path $_.FullName -DestinationPath (Join-Path dist ($_.Name + '.zip')) -Force } else { Copy-Item $_.FullName dist }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: starz-windows
-          path: dist/*.vst3
+          path: dist/*
