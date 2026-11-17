@@ -1,0 +1,5 @@
+build/out/
+build/obj_*/
+*.o
+*.raw
+__pycache__/
