@@ -31,6 +31,7 @@ struct Params {
     float retuneMs = 0.5f;
     bool tune = true;
     bool preSnap = true;
+    bool copiesOnly = false;
     int voices = 8;
     float spreadCents = 25.f;
     float driftCents = 40.f;
@@ -111,12 +112,25 @@ struct Voice {
     }
 };
 
+inline float copyPan(int voice, int copies, int stereoMode)
+{
+    const int pair = (voice - 1) / 2;
+    if ((copies % 2 == 1 && voice == copies) || (stereoMode == 1 && pair % 3 == 1))
+        return 0.5f;
+    const float width = 0.33f + 0.16f * (float)((pair * 5) % 7) / 6.f;
+    return 0.5f + (voice % 2 == 1 ? -width : width);
+}
+
 class Engine {
 public:
     void prepare(double sampleRate)
     {
         sr = sampleRate;
         shA = 1.f - std::exp(-6.2831853f * gShelfHz / (float)sampleRate);
+        const int periods = (int)(sr * 0.5 / 70.0) + 1;
+        dec.resize(periods + 520);
+        d.resize(periods);
+        cm.resize(periods);
         hist.assign(kRing, 0.f);
         histL.assign(kRing, 0.f);
         histR.assign(kRing, 0.f);
@@ -151,6 +165,17 @@ public:
             std::fill(v.out.begin(), v.out.end(), 0.f);
         }
         outTime = 0;
+        if (P.copiesOnly) {
+            wetS = P.wet;
+            holdN = 0;
+            lastF0 = 0.f;
+            std::fill(std::begin(rawHist), std::end(rawHist), 0.f);
+            for (auto& v : vc) {
+                v.pgl = v.pgr = 0.f;
+                v.driftState = 0.f;
+            }
+            initVoices();
+        }
     }
 
     void setParams(const Params& np)
@@ -173,6 +198,16 @@ public:
     int markCount() const { return nMarks; }
 
     void process(const float* inL, const float* inR, float* outL, float* outR, int n)
+    {
+        constexpr int maxSlice = 8192;
+        for (int offset = 0; offset < n; offset += maxSlice) {
+            processSlice(inL + offset, inR ? inR + offset : nullptr, outL + offset, outR + offset,
+                         std::min(maxSlice, n - offset));
+        }
+    }
+
+private:
+    void processSlice(const float* inL, const float* inR, float* outL, float* outR, int n)
     {
         int64_t w0 = w;
         for (int i = 0; i < n; i++) {
@@ -211,10 +246,13 @@ public:
         float ss = 0.f;
         for (int vi = 0; vi < kMaxVoices; vi++) {
             float g = std::min(1.f, std::max(0.f, ve - (float)vi));
+            if (P.copiesOnly && vi == 0) g = 0.f;
             ss += g * g;
             Voice& v = vc[vi];
             float pan = 0.5f;
-            if (P.voices > 1) {
+            if (P.copiesOnly && vi > 0) {
+                pan = copyPan(vi, P.voices - 1, P.stereoMode);
+            } else if (P.voices > 1) {
                 if (P.stereoMode == 1) {
                     pan = (vi % 3 == 0) ? 0.5f : (vi % 3 == 1 ? 0.f : 1.f);
                     pan = std::min(1.f, std::max(0.f, pan + v.panJ * 0.04f));
@@ -248,6 +286,7 @@ public:
             }
         }
         const double twoPi = 6.283185307179586;
+        const float wetA = 1.f - (float)std::exp(-1.0 / (0.020 * sr));
         const float invn = 1.0f / (float)n;
         for (int i = 0; i < n; i++) {
             int64_t o = outTime + i;
@@ -276,6 +315,12 @@ public:
                 sr_ += y * gr;
             }
             float wl = sl * balL, wr = sr_ * balR;
+            if (P.copiesOnly) {
+                wetS += (P.wet - wetS) * wetA;
+                outL[i] = (dryL + wl * wetS) * P.outGain;
+                outR[i] = (dryR + wr * wetS) * P.outGain;
+                continue;
+            }
             {
                 float mk = 1.f + gMake * widen;
                 shL += shA * (wl - shL);
@@ -294,7 +339,6 @@ public:
         outTime += n;
     }
 
-private:
     struct Det {
         int64_t center;
         float f0;
@@ -305,6 +349,7 @@ private:
     bool seeded = false;
     int L = 512;
     std::vector<float> hist, histL, histR, histB;
+    std::vector<float> dec, d, cm;
     float eL = 0.f, eR = 0.f, balS = 0.5f;
     float shL = 0.f, shR = 0.f, shA = 0.f;
     int64_t w = 0;
@@ -323,6 +368,7 @@ private:
     Voice vc[kMaxVoices];
     bool allowed[12];
     float swS = 1.f;
+    float wetS = 0.f;
     int holdN = 0;
 
     void applyLatency() { L = (int)std::ceil((double)P.latK * sr / std::max(40.f, P.minF0)) + 64; }
@@ -379,10 +425,6 @@ private:
         const int tauMin = std::max(2, (int)(sd / 900.0));
         const int W = J + tauMax;
         if (w < 2 * W + 4) return;
-        static thread_local std::vector<float> dec, d, cm;
-        dec.resize(W);
-        d.assign(tauMax + 1, 0.f);
-        cm.assign(tauMax + 1, 0.f);
         int64_t base = w - 2 * W;
         for (int i = 0; i < W; i++) dec[i] = 0.5f * (hist[(base + 2 * i) & kMask] + hist[(base + 2 * i + 1) & kMask]);
         double e = 0;
@@ -668,7 +710,8 @@ private:
         float t = std::min(1.f, std::max(0.f, (ws - 0.15f) / 0.45f));
         float g = t * t * (3.f - 2.f * t);
         if (gTrace && g < 0.999f) gTrace->push_back({o, ws});
-        float y = g * (ol / std::max(ws, 1e-3f)) + (1.f - g) * dry;
+        const float fallback = P.copiesOnly ? 0.10f : 1.f;
+        float y = g * (ol / std::max(ws, 1e-3f)) + (1.f - g) * dry * fallback;
         v.out[ix] = y;
         v.emitted = o + 1;
     }

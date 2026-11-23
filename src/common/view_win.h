@@ -9,36 +9,45 @@ public:
         rect = Steinberg::ViewRect(0, 0, kW, kH);
     }
 
+    ~BaseView() override { closeWindow(); }
+
     Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) SMTG_OVERRIDE
     {
-        return strcmp(type, "HWND") == 0 ? Steinberg::kResultTrue : Steinberg::kResultFalse;
+        return type && strcmp(type, "HWND") == 0 ? Steinberg::kResultTrue : Steinberg::kResultFalse;
     }
 
     Steinberg::tresult PLUGIN_API attached(void* parent, Steinberg::FIDString type) SMTG_OVERRIDE
     {
+        if (!parent || hwnd || isPlatformTypeSupported(type) != Steinberg::kResultTrue)
+            return Steinberg::kResultFalse;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                reinterpret_cast<LPCWSTR>(&BaseView::proc), &module))
+            return Steinberg::kResultFalse;
         acquire();
-        HINSTANCE hi = GetModuleHandleW(nullptr);
+        acquired = true;
         WNDCLASSW wc = {};
         wc.lpfnWndProc = &BaseView::proc;
-        wc.hInstance = hi;
+        wc.hInstance = module;
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.lpszClassName = C.cls;
-        RegisterClassW(&wc);
+        if (!RegisterClassW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+            closeWindow();
+            return Steinberg::kResultFalse;
+        }
         init();
-        hwnd = CreateWindowExW(0, C.cls, L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, kW, kH, (HWND)parent, nullptr, hi, this);
+        hwnd = CreateWindowExW(0, C.cls, L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, kW, kH,
+                               (HWND)parent, nullptr, module, this);
+        if (!hwnd) {
+            closeWindow();
+            return Steinberg::kResultFalse;
+        }
         SetTimer(hwnd, 1, 33, nullptr);
         return Steinberg::CPluginView::attached(parent, type);
     }
 
     Steinberg::tresult PLUGIN_API removed() SMTG_OVERRIDE
     {
-        if (hwnd) {
-            KillTimer(hwnd, 1);
-            DestroyWindow(hwnd);
-            hwnd = nullptr;
-            dropCache();
-            release();
-        }
+        closeWindow();
         return Steinberg::CPluginView::removed();
     }
 
@@ -51,6 +60,26 @@ public:
 
 protected:
     HWND hwnd = nullptr;
+    HMODULE module = nullptr;
+    bool acquired = false;
+
+    void closeWindow()
+    {
+        if (hwnd) {
+            KillTimer(hwnd, 1);
+            DestroyWindow(hwnd);
+            hwnd = nullptr;
+        }
+        if (module) {
+            UnregisterClassW(C.cls, module);
+            module = nullptr;
+        }
+        if (acquired) {
+            dropCache();
+            ui::release();
+            acquired = false;
+        }
+    }
 
     bool pickFile(bool save, userpresets::fs::path& out) override
     {
@@ -91,6 +120,14 @@ protected:
     LRESULT msg(HWND h, UINT m, WPARAM w, LPARAM l)
     {
         switch (m) {
+        case WM_NCDESTROY:
+            KillTimer(h, 1);
+            SetWindowLongPtrW(h, GWLP_USERDATA, 0);
+            if (hwnd == h) hwnd = nullptr;
+            break;
+        case WM_CAPTURECHANGED:
+            mouseUp();
+            break;
         case WM_ERASEBKGND:
             return 1;
         case WM_TIMER:

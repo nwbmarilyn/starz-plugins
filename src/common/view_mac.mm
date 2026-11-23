@@ -113,14 +113,19 @@
 
 namespace ui {
 
+BaseView::~BaseView()
+{
+    if (nsView) removed();
+}
+
 Steinberg::tresult PLUGIN_API BaseView::isPlatformTypeSupported(Steinberg::FIDString type)
 {
-    return strcmp(type, Steinberg::kPlatformTypeNSView) == 0 ? Steinberg::kResultTrue : Steinberg::kResultFalse;
+    return type && strcmp(type, Steinberg::kPlatformTypeNSView) == 0 ? Steinberg::kResultTrue : Steinberg::kResultFalse;
 }
 
 Steinberg::tresult PLUGIN_API BaseView::attached(void* parent, Steinberg::FIDString type)
 {
-    if (!parent || strcmp(type, Steinberg::kPlatformTypeNSView) != 0) return Steinberg::kResultFalse;
+    if (!parent || nsView || isPlatformTypeSupported(type) != Steinberg::kResultTrue) return Steinberg::kResultFalse;
     acquire();
     init();
     STARZ_NSVIEW_CLASS* v = [[STARZ_NSVIEW_CLASS alloc] initWithFrame:NSMakeRect(0, 0, kW, kH)];
@@ -144,7 +149,7 @@ Steinberg::tresult PLUGIN_API BaseView::removed()
         nsView = nullptr;
         nsTimer = nullptr;
         dropCache();
-        release();
+        ui::release();
     }
     return Steinberg::CPluginView::removed();
 }

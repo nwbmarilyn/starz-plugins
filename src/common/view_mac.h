@@ -9,6 +9,8 @@ public:
         rect = Steinberg::ViewRect(0, 0, kW, kH);
     }
 
+    ~BaseView() override;
+
     Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) SMTG_OVERRIDE;
     Steinberg::tresult PLUGIN_API attached(void* parent, Steinberg::FIDString type) SMTG_OVERRIDE;
     Steinberg::tresult PLUGIN_API removed() SMTG_OVERRIDE;

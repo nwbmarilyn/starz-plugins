@@ -27,8 +27,15 @@ inline Gdiplus::Image* loadLogo(const unsigned char* data, unsigned long size)
     IStream* st = SHCreateMemStream(data, (UINT)size);
     if (!st) return nullptr;
     Gdiplus::Image* im = Gdiplus::Image::FromStream(st);
+    Gdiplus::Bitmap* decoded = nullptr;
+    if (im && im->GetLastStatus() == Gdiplus::Ok) {
+        decoded = new Gdiplus::Bitmap(im->GetWidth(), im->GetHeight(), PixelFormat32bppPARGB);
+        Gdiplus::Graphics g(decoded);
+        g.DrawImage(im, 0, 0);
+    }
+    delete im;
     st->Release();
-    return im;
+    return decoded;
 }
 
 }

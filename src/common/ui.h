@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 #include <cwchar>
 #include <cwctype>
 #include <string>
@@ -42,11 +43,13 @@ static const Color cBg1(255, 206, 206, 203), cBg2(255, 192, 192, 190), cCard(255
 static const Color cText(255, 17, 17, 17), cDim(255, 112, 112, 112), cPink(255, 255, 85, 0), cAqua(255, 17, 17, 17), cYellow(255, 82, 82, 82);
 static const Color dText(255, 226, 224, 216), dDim(255, 142, 142, 138), dAmber(255, 255, 150, 60), dGlass(255, 150, 150, 146);
 
+inline std::mutex gUiMutex;
 inline int gRef = 0;
 inline Image* gLogo = nullptr;
 
 static void acquire()
 {
+    const std::lock_guard<std::mutex> lock(gUiMutex);
     if (gRef++ == 0) {
         gfx::startup();
         gLogo = gfx::loadLogo(kLogoPng, (unsigned long)kLogoPngSize);
@@ -55,6 +58,7 @@ static void acquire()
 
 static void release()
 {
+    const std::lock_guard<std::mutex> lock(gUiMutex);
     if (--gRef == 0) {
         delete gLogo;
         gLogo = nullptr;
@@ -282,6 +286,8 @@ public:
     ViewCore(Host* host, const Cfg& cfg) : hostp(host), C(cfg), kW(cfg.w), kH(cfg.h) {}
     virtual ~ViewCore() {}
 
+    void keepOwner(Steinberg::FUnknown* owner) { viewOwner = owner; }
+
     int width() const { return kW; }
     int height() const { return kH; }
 
@@ -306,18 +312,14 @@ public:
 
     void paintAll(Graphics& g)
     {
-        if (bgCache && bgScale != gDeviceScale) dropCache();
-        if (!bgCache) buildBackground();
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
-        g.DrawImage(bgCache, 0, 0);
-        drawHeader(g);
+        paintFrame(g);
         paintBody(g);
         for (size_t i = 0; i < ctl.size(); i++) {
             const Ctl& c = ctl[i];
             bool act = (int)i == drag, hov = (int)i == hover;
-            if (c.kind == kKnob) analogKnob(g, c.x, c.y, c.r, hostp->getNorm(c.id), c.col, act || hov, c.label, hostp->text(c.id) + unitOf(c.id));
-            else if (c.kind == kSelect) drawSelect(g, c, hov);
+            paintControl(g, c, act || hov);
         }
     }
 
@@ -394,6 +396,7 @@ public:
     }
 
 protected:
+    Steinberg::IPtr<Steinberg::FUnknown> viewOwner;
     Host* hostp;
     Cfg C;
     int kW, kH;
@@ -415,6 +418,22 @@ protected:
     virtual void paintBody(Graphics& g) = 0;
     virtual const wchar_t* unitOf(int id) = 0;
     virtual void onTick() {}
+
+    virtual void paintFrame(Graphics& g)
+    {
+        if (bgCache && bgScale != gDeviceScale) dropCache();
+        if (!bgCache) buildBackground();
+        g.DrawImage(bgCache, 0, 0);
+        drawHeader(g);
+    }
+
+    virtual void paintControl(Graphics& g, const Ctl& c, bool highlight)
+    {
+        if (c.kind == kKnob)
+            analogKnob(g, c.x, c.y, c.r, hostp->getNorm(c.id), c.col, highlight, c.label, hostp->text(c.id) + unitOf(c.id));
+        else if (c.kind == kSelect)
+            drawSelect(g, c, highlight);
+    }
 
     void knob(int id, float cx, float cy, float r, Color c, const wchar_t* lab) { ctl.push_back({id, kKnob, cx, cy, r, 0, 0, c, lab}); }
     void sel(int id, float x, float y, float w, Color c, const wchar_t* lab) { ctl.push_back({id, kSelect, x, y, 0, w, 26, c, lab}); }

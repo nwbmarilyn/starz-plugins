@@ -178,7 +178,9 @@ public:
                 df[i] = kDefs[i].def;
                 st[i] = kDefs[i].steps;
             }
-            return new gui::View(this, kParamCount, mn, mx, df, st, gPresetNames);
+            auto* view = new gui::View(this, kParamCount, mn, mx, df, st, gPresetNames);
+            view->keepOwner(static_cast<IEditController*>(this));
+            return view;
         }
         return nullptr;
     }
@@ -257,6 +259,8 @@ public:
 
     tresult PLUGIN_API setParamNormalized(ParamID tag, ParamValue value) SMTG_OVERRIDE
     {
+        if (!std::isfinite(value)) return kResultFalse;
+        value = std::clamp(value, 0.0, 1.0);
         tresult r = SingleComponentEffect::setParamNormalized(tag, value);
         if (tag < kParamCount)
         {
@@ -289,17 +293,22 @@ public:
                 int32 off;
                 ParamValue v;
                 ParamID id = q->getParameterId();
-                if (q->getPoint(pts - 1, off, v) == kResultTrue && id < kParamCount)
-                    norm[id].store((float)v);
+                if (q->getPoint(pts - 1, off, v) == kResultTrue && id < kParamCount && std::isfinite(v))
+                    norm[id].store((float)std::clamp(v, 0.0, 1.0));
             }
         }
-        if (data.numInputs == 0 || data.numOutputs == 0 || data.numSamples == 0)
+        if (data.numInputs < 1 || data.numOutputs < 1 || data.numSamples <= 0
+            || data.symbolicSampleSize != kSample32 || !data.inputs || !data.outputs
+            || data.inputs[0].numChannels < 1 || data.outputs[0].numChannels < 2)
             return kResultOk;
         applyParams();
         float* const* in = data.inputs[0].channelBuffers32;
         float* const* out = data.outputs[0].channelBuffers32;
         int nch = data.inputs[0].numChannels;
-        engine.process(in[0], nch > 1 ? in[1] : in[0], out[0], data.outputs[0].numChannels > 1 ? out[1] : out[0], data.numSamples);
+        if (!in || !out || !in[0] || !out[0] || !out[1])
+            return kResultOk;
+        engine.process(in[0], nch > 1 && in[1] ? in[1] : in[0], out[0], out[1], data.numSamples);
+        data.outputs[0].silenceFlags = 0;
         return kResultOk;
     }
 

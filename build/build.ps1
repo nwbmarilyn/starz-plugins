@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet('vocal', 'reverb', 'delay', 'all')][string]$Plugin = 'all',
+    [ValidateSet('vocal', 'reverb', 'delay', 'swarm', 'fit', 'all')][string]$Plugin = 'all',
     [switch]$Install,
     [switch]$Tests,
     [string]$Sdk = $(if ($env:VST3_SDK) { $env:VST3_SDK } else { 'D:\class FLPjcts\сведение\_работа\toolchain\vst3sdk' }),
@@ -13,6 +13,8 @@ $out = Join-Path $here 'out'
 $inc = @("-I$root\src\common", "-I$root\src\core", "-I$root\src\vocal", "-I$root\src\fx", "-I$Sdk")
 
 $targets = @{
+    fit    = @{ Name = 'StarzFit'; Main = "$root\src\fit\plugin.cpp"; Def = @() }
+    swarm  = @{ Name = 'StarzSwarm';  Main = "$root\src\swarm\plugin.cpp"; Def = @() }
     vocal  = @{ Name = 'StarzVocal';  Main = "$root\src\vocal\plugin.cpp";  Def = @() }
     reverb = @{ Name = 'StarzReverb'; Main = "$root\src\fx\fxplugin.cpp";   Def = @('-DARK_REVERB') }
     delay  = @{ Name = 'StarzDelay';  Main = "$root\src\fx\fxplugin.cpp";   Def = @('-DARK_DELAY') }
@@ -54,7 +56,7 @@ function Build-One($key) {
     return $false
 }
 
-$keys = if ($Plugin -eq 'all') { @('vocal', 'reverb', 'delay') } else { @($Plugin) }
+$keys = if ($Plugin -eq 'all') { @('vocal', 'reverb', 'delay', 'swarm', 'fit') } else { @($Plugin) }
 $ok = $true
 foreach ($k in $keys) { if (-not (Build-One $k)) { $ok = $false } }
 
